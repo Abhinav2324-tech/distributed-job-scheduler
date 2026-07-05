@@ -1,44 +1,70 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Consolas, monospace;
+/* Self-hosted, subset by weight (not the full family) to keep the bundle lean. */
+@import "@fontsource/space-grotesk/500.css";
+@import "@fontsource/space-grotesk/600.css";
+@import "@fontsource/space-grotesk/700.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
 
-  /* Job status accent colors - used consistently across cards, badges, charts */
-  --color-status-queued: #9ca3af;
-  --color-status-scheduled: #818cf8;
-  --color-status-running: #3b82f6;
-  --color-status-completed: #22c55e;
-  --color-status-failed: #f59e0b;
-  --color-status-dead-letter: #ef4444;
+@theme {
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Consolas, monospace;
+
+  /* Job status accent colors - used consistently across cards, badges, and charts. */
+  --color-status-queued: #948a76;
+  --color-status-scheduled: #7b86e6;
+  --color-status-running: #2f8fe0;
+  --color-status-completed: #1fa971;
+  --color-status-failed: #d9922f;
+  --color-status-dead-letter: #dd4b53;
 }
 
 :root {
   color-scheme: light;
-  --surface: #ffffff;
-  --surface-raised: #f9fafb;
-  --border-subtle: #e5e7eb;
-  --text-primary: #0a0a0a;
-  --text-secondary: #6b7280;
+  --surface: #fbfaf7;
+  --surface-raised: #f2efe8;
+  --surface-sunken: #eeeae1;
+  --border-subtle: #e2dccd;
+  --text-primary: #201c15;
+  --text-secondary: #6f6553;
+  --brand: #0d8e7a;
+  --brand-hover: #0a7566;
+  --brand-contrast: #fdfefc;
+  --shadow-color: 30 25 10;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --surface: #0a0a0b;
-  --surface-raised: #131316;
-  --border-subtle: #232327;
-  --text-primary: #f4f4f5;
-  --text-secondary: #9ca3af;
+  --surface: #14130f;
+  --surface-raised: #1c1a15;
+  --surface-sunken: #0e0d0a;
+  --border-subtle: #2b271e;
+  --text-primary: #f2ede1;
+  --text-secondary: #9c9280;
+  --brand: #35dfc2;
+  --brand-hover: #5aead2;
+  --brand-contrast: #06211c;
+  --shadow-color: 0 0 0;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --surface: #0a0a0b;
-    --surface-raised: #131316;
-    --border-subtle: #232327;
-    --text-primary: #f4f4f5;
-    --text-secondary: #9ca3af;
+    --surface: #14130f;
+    --surface-raised: #1c1a15;
+    --surface-sunken: #0e0d0a;
+    --border-subtle: #2b271e;
+    --text-primary: #f2ede1;
+    --text-secondary: #9c9280;
+    --brand: #35dfc2;
+    --brand-hover: #5aead2;
+    --brand-contrast: #06211c;
+    --shadow-color: 0 0 0;
   }
 }
 
@@ -58,4 +84,35 @@ body {
   color: var(--text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 35%, transparent);
+  color: var(--text-primary);
+}
+
+/* A visible, on-brand focus ring everywhere, replacing the browser default
+   without dropping keyboard-accessibility affordances. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 999px;
+  border: 2px solid var(--surface);
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+  background-clip: padding-box;
 }

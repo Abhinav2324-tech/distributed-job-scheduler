@@ -2,6 +2,7 @@ import { useOverview } from "../hooks/useOverview";
 import { StatCard } from "../components/StatCard";
 import { ThroughputChart } from "../components/ThroughputChart";
 import { StatusBreakdown } from "../components/StatusBreakdown";
+import { PageHeader } from "../components/PageHeader";
 
 export function OverviewPage() {
   const { data, isLoading, isError } = useOverview();
@@ -15,10 +16,7 @@ export function OverviewPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-[var(--text-primary)]">Overview</h1>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">
-        System health at a glance, updated live.
-      </p>
+      <PageHeader title="Overview" description="System health at a glance, updated live." />
 
       <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard
@@ -40,16 +38,18 @@ export function OverviewPage() {
         />
       </div>
 
-      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 lg:col-span-2">
-          <h2 className="text-sm font-medium text-[var(--text-primary)]">Throughput (last 12 hours)</h2>
-          <div className="mt-2">
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5 lg:col-span-2">
+          <h2 className="font-display text-sm font-semibold text-[var(--text-primary)]">
+            Throughput <span className="font-sans font-normal text-[var(--text-secondary)]">— last 12 hours</span>
+          </h2>
+          <div className="mt-3">
             <ThroughputChart data={data.throughputSeries} />
           </div>
         </div>
 
-        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4">
-          <h2 className="text-sm font-medium text-[var(--text-primary)]">Job status breakdown</h2>
+        <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-5">
+          <h2 className="font-display text-sm font-semibold text-[var(--text-primary)]">Job status breakdown</h2>
           <div className="mt-4">
             <StatusBreakdown counts={data.statusCounts} />
           </div>

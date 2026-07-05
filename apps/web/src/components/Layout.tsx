@@ -1,16 +1,35 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
 import { applyTheme, getStoredTheme, type Theme } from "../lib/theme";
 import { useAuth } from "../contexts/AuthContext";
+import { Logo } from "./Logo";
+import {
+  DeadLetterIcon,
+  JobsIcon,
+  MoonIcon,
+  OverviewIcon,
+  QueuesIcon,
+  SunIcon,
+  WorkersIcon,
+} from "./icons";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Overview", end: true },
-  { to: "/queues", label: "Queues" },
-  { to: "/jobs", label: "Jobs" },
-  { to: "/workers", label: "Workers" },
-  { to: "/dead-letter", label: "Dead Letter Queue" },
+const NAV_ITEMS: Array<{ to: string; label: string; end?: boolean; icon: (p: { className?: string }) => ReactNode }> = [
+  { to: "/", label: "Overview", end: true, icon: (p) => <OverviewIcon {...p} /> },
+  { to: "/queues", label: "Queues", icon: (p) => <QueuesIcon {...p} /> },
+  { to: "/jobs", label: "Jobs", icon: (p) => <JobsIcon {...p} /> },
+  { to: "/workers", label: "Workers", icon: (p) => <WorkersIcon {...p} /> },
+  { to: "/dead-letter", label: "Dead Letter Queue", icon: (p) => <DeadLetterIcon {...p} /> },
 ];
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join("");
+}
 
 export function Layout() {
   const { user, logout } = useAuth();
@@ -30,11 +49,10 @@ export function Layout() {
 
   return (
     <div className="flex h-full">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--surface-raised)] px-4 py-5">
-        <div className="mb-8 px-2 text-sm font-semibold tracking-tight text-[var(--text-primary)]">
-          Job Scheduler
-        </div>
-        <nav className="flex flex-1 flex-col gap-1">
+      <aside className="flex w-64 shrink-0 flex-col border-r border-[var(--border-subtle)] bg-[var(--surface-raised)] px-3.5 py-5">
+        <Logo className="mb-8 px-2" />
+
+        <nav className="flex flex-1 flex-col gap-0.5">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
@@ -42,40 +60,67 @@ export function Layout() {
               end={item.end}
               className={({ isActive }) =>
                 clsx(
-                  "rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  "group relative flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                   isActive
-                    ? "bg-[var(--border-subtle)] text-[var(--text-primary)]"
-                    : "text-[var(--text-secondary)] hover:bg-[var(--border-subtle)]/60 hover:text-[var(--text-primary)]",
+                    ? "bg-[var(--surface-sunken)] text-[var(--text-primary)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--surface-sunken)]/60 hover:text-[var(--text-primary)]",
                 )
               }
             >
-              {item.label}
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={clsx(
+                      "absolute left-0 top-1/2 h-4 w-[2.5px] -translate-y-1/2 rounded-full bg-[var(--brand)] transition-opacity",
+                      isActive ? "opacity-100" : "opacity-0",
+                    )}
+                  />
+                  {item.icon({
+                    className: clsx(
+                      "h-4 w-4 shrink-0 transition-colors",
+                      isActive ? "text-[var(--brand)]" : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]",
+                    ),
+                  })}
+                  <span className="truncate">{item.label}</span>
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
-        <button
-          onClick={toggleTheme}
-          className="mb-2 rounded-md border border-[var(--border-subtle)] px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-        >
-          {theme === "dark" ? "Switch to light" : "Switch to dark"}
-        </button>
-        {user && (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-[var(--border-subtle)] px-3 py-2">
-            <div className="min-w-0">
-              <div className="truncate text-xs font-medium text-[var(--text-primary)]">{user.name}</div>
-              <div className="truncate text-[11px] text-[var(--text-secondary)]">{user.email}</div>
+
+        <div className="flex flex-col gap-2 border-t border-[var(--border-subtle)] pt-3">
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--surface-sunken)]/60 hover:text-[var(--text-primary)]"
+          >
+            {theme === "dark" ? <SunIcon className="h-4 w-4" /> : <MoonIcon className="h-4 w-4" />}
+            {theme === "dark" ? "Light mode" : "Dark mode"}
+          </button>
+          {user && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-subtle)] px-2.5 py-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--brand)]/15 font-display text-[11px] font-semibold text-[var(--brand)]">
+                  {initials(user.name)}
+                </div>
+                <div className="min-w-0">
+                  <div className="truncate text-xs font-medium text-[var(--text-primary)]">{user.name}</div>
+                  <div className="truncate text-[11px] text-[var(--text-secondary)]">{user.email}</div>
+                </div>
+              </div>
+              <button
+                onClick={logout}
+                className="shrink-0 text-[11px] font-medium text-[var(--text-secondary)] hover:text-status-dead-letter"
+              >
+                Sign out
+              </button>
             </div>
-            <button
-              onClick={logout}
-              className="shrink-0 text-xs font-medium text-[var(--text-secondary)] hover:text-status-dead-letter"
-            >
-              Sign out
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
-      <main className="flex-1 overflow-y-auto px-8 py-6">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto px-8 py-7">
+        <div className="mx-auto max-w-6xl">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

@@ -3,6 +3,8 @@ import { useQueues, useSetQueuePaused } from "../hooks/useQueues";
 import { useProjects } from "../hooks/useProjects";
 import { QueueFormModal } from "../components/QueueFormModal";
 import { ProjectFormModal } from "../components/ProjectFormModal";
+import { PageHeader } from "../components/PageHeader";
+import { primaryButtonClassName, secondaryButtonClassName } from "../components/formStyles";
 import { useToast } from "../contexts/ToastContext";
 import type { Queue } from "../types";
 
@@ -27,30 +29,25 @@ export function QueuesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">Queues</h1>
-          <p className="mt-1 text-sm text-[var(--text-secondary)]">
-            Live counts update automatically as jobs move through each queue.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowCreateProject(true)}
-            className="rounded-md border border-[var(--border-subtle)] px-3 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          >
-            New project
-          </button>
-          <button
-            onClick={() => setShowCreate(true)}
-            disabled={!hasProjects}
-            title={hasProjects ? undefined : "Create a project first"}
-            className="rounded-md bg-status-running px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
-          >
-            Create queue
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Queues"
+        description="Live counts update automatically as jobs move through each queue."
+        actions={
+          <>
+            <button onClick={() => setShowCreateProject(true)} className={secondaryButtonClassName}>
+              New project
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              disabled={!hasProjects}
+              title={hasProjects ? undefined : "Create a project first"}
+              className={primaryButtonClassName}
+            >
+              Create queue
+            </button>
+          </>
+        }
+      />
 
       {!hasProjects && (
         <div className="mt-4 rounded-lg border border-dashed border-[var(--border-subtle)] p-4 text-sm text-[var(--text-secondary)]">
@@ -60,7 +57,7 @@ export function QueuesPage() {
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
         <table className="w-full text-left text-sm">
-          <thead className="bg-[var(--surface-raised)] text-xs uppercase tracking-wide text-[var(--text-secondary)]">
+          <thead className="bg-[var(--surface-raised)] font-mono text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
             <tr>
               <th className="px-4 py-3 font-medium">Name</th>
               <th className="px-4 py-3 font-medium">Project</th>
@@ -96,7 +93,10 @@ export function QueuesPage() {
               </tr>
             )}
             {data?.data.map((queue) => (
-              <tr key={queue.id} className="border-t border-[var(--border-subtle)]">
+              <tr
+                key={queue.id}
+                className="border-t border-[var(--border-subtle)] transition-colors hover:bg-[var(--surface-raised)]/60"
+              >
                 <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{queue.name}</td>
                 <td className="px-4 py-3 text-[var(--text-secondary)]">{queue.project?.name ?? "-"}</td>
                 <td className="px-4 py-3 text-[var(--text-secondary)]">{queue.priority}</td>

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
-import { inputClassName, labelClassName } from "./formStyles";
+import { inputClassName, labelClassName, primaryButtonClassName } from "./formStyles";
 import { useCreateProject } from "../hooks/useProjects";
 import { useToast } from "../contexts/ToastContext";
 import { ApiRequestError } from "../lib/api";
@@ -28,7 +28,7 @@ export function ProjectFormModal({ onClose }: { onClose: () => void }) {
     <Modal title="Create project" onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {error && (
-          <div className="mb-4 rounded-md border border-status-dead-letter/30 bg-status-dead-letter/10 px-3 py-2 text-sm text-status-dead-letter">
+          <div className="mb-4 rounded-lg border border-status-dead-letter/30 bg-status-dead-letter/10 px-3 py-2 text-sm text-status-dead-letter">
             {error}
           </div>
         )}
@@ -51,11 +51,7 @@ export function ProjectFormModal({ onClose }: { onClose: () => void }) {
           placeholder="What this project is for"
         />
 
-        <button
-          type="submit"
-          disabled={createProject.isPending}
-          className="w-full rounded-md bg-status-running px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="submit" disabled={createProject.isPending} className={`${primaryButtonClassName} w-full`}>
           {createProject.isPending ? "Creating..." : "Create project"}
         </button>
       </form>

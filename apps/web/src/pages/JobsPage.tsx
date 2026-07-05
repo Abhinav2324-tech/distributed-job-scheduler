@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useJobs } from "../hooks/useJobs";
 import { useQueues } from "../hooks/useQueues";
 import { StatusBadge, type JobStatusLike } from "../components/StatusBadge";
-import { inputClassName } from "../components/formStyles";
+import { PageHeader } from "../components/PageHeader";
+import { ghostButtonClassName, inputClassName, secondaryButtonClassName } from "../components/formStyles";
 
 const STATUS_OPTIONS: JobStatusLike[] = [
   "QUEUED",
@@ -52,12 +53,12 @@ export function JobsPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-[var(--text-primary)]">Job Explorer</h1>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">
-        Search and filter every job across your organization's queues.
-      </p>
+      <PageHeader
+        title="Job Explorer"
+        description="Search and filter every job across your organization's queues."
+      />
 
-      <div className="mt-4 flex flex-wrap items-end gap-3">
+      <div className="mt-5 flex flex-wrap items-end gap-3">
         <div>
           <label className="mb-1 block text-xs font-medium text-[var(--text-secondary)]">Status</label>
           <select value={status} onChange={updateFilter(setStatus)} className={inputClassName}>
@@ -89,10 +90,7 @@ export function JobsPage() {
           <input type="date" value={to} onChange={updateFilter(setTo)} className={inputClassName} />
         </div>
         {hasFilters && (
-          <button
-            onClick={clearFilters}
-            className="mb-0.5 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-          >
+          <button onClick={clearFilters} className={`${ghostButtonClassName} mb-0.5`}>
             Clear filters
           </button>
         )}
@@ -100,7 +98,7 @@ export function JobsPage() {
 
       <div className="mt-4 overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
         <table className="w-full text-left text-sm">
-          <thead className="bg-[var(--surface-raised)] text-xs uppercase tracking-wide text-[var(--text-secondary)]">
+          <thead className="bg-[var(--surface-raised)] font-mono text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
             <tr>
               <th className="px-4 py-3 font-medium">Job type</th>
               <th className="px-4 py-3 font-medium">Queue</th>
@@ -135,17 +133,17 @@ export function JobsPage() {
               <tr
                 key={job.id}
                 onClick={() => navigate(`/jobs/${job.id}`)}
-                className="cursor-pointer border-t border-[var(--border-subtle)] hover:bg-[var(--surface-raised)]"
+                className="cursor-pointer border-t border-[var(--border-subtle)] transition-colors hover:bg-[var(--surface-raised)]"
               >
                 <td className="px-4 py-3 font-medium text-[var(--text-primary)]">{job.jobType}</td>
                 <td className="px-4 py-3 text-[var(--text-secondary)]">{job.queue?.name ?? "-"}</td>
                 <td className="px-4 py-3">
                   <StatusBadge status={job.status as JobStatusLike} />
                 </td>
-                <td className="px-4 py-3 tabular-nums text-[var(--text-secondary)]">
+                <td className="px-4 py-3 font-mono tabular-nums text-[var(--text-secondary)]">
                   {job.retryCount}/{job.maxRetries}
                 </td>
-                <td className="px-4 py-3 text-[var(--text-secondary)]">
+                <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
                   {new Date(job.createdAt).toLocaleString()}
                 </td>
               </tr>
@@ -163,14 +161,14 @@ export function JobsPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="rounded-md border border-[var(--border-subtle)] px-3 py-1 disabled:opacity-40"
+              className={secondaryButtonClassName}
             >
               Previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
               disabled={page >= data.pagination.totalPages}
-              className="rounded-md border border-[var(--border-subtle)] px-3 py-1 disabled:opacity-40"
+              className={secondaryButtonClassName}
             >
               Next
             </button>

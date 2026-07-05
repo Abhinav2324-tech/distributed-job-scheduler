@@ -3,6 +3,7 @@ import { useJob } from "../hooks/useJobs";
 import { useRetryDeadLetterEntry } from "../hooks/useDeadLetter";
 import { useToast } from "../contexts/ToastContext";
 import { StatusBadge, type JobStatusLike } from "../components/StatusBadge";
+import { primaryButtonClassName } from "../components/formStyles";
 import { ApiRequestError } from "../lib/api";
 
 function formatDuration(ms: number | null): string {
@@ -36,13 +37,18 @@ export function JobDetailPage() {
 
   return (
     <div>
-      <Link to="/jobs" className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]">
+      <Link
+        to="/jobs"
+        className="inline-flex items-center gap-1 text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+      >
         ← Back to Job Explorer
       </Link>
 
       <div className="mt-3 flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[var(--text-primary)]">{job.jobType}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-[var(--text-primary)]">
+            {job.jobType}
+          </h1>
           <p className="mt-1 font-mono text-xs text-[var(--text-secondary)]">{job.id}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -51,7 +57,7 @@ export function JobDetailPage() {
             <button
               onClick={handleRetry}
               disabled={retryDeadLetter.isPending}
-              className="rounded-md bg-status-running px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className={`${primaryButtonClassName} px-3 py-1.5 text-xs`}
             >
               {retryDeadLetter.isPending ? "Resubmitting..." : "Retry job"}
             </button>
@@ -76,14 +82,14 @@ export function JobDetailPage() {
       )}
 
       <div className="mt-6 rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4">
-        <h2 className="text-sm font-medium text-[var(--text-primary)]">Payload</h2>
-        <pre className="mt-2 overflow-x-auto rounded-md bg-[var(--surface)] p-3 text-xs text-[var(--text-secondary)]">
+        <h2 className="font-display text-sm font-semibold text-[var(--text-primary)]">Payload</h2>
+        <pre className="mt-2 overflow-x-auto rounded-lg bg-[var(--surface-sunken)] p-3 font-mono text-xs text-[var(--text-secondary)]">
           {JSON.stringify(job.payload, null, 2)}
         </pre>
       </div>
 
       <div className="mt-6">
-        <h2 className="text-sm font-medium text-[var(--text-primary)]">Execution history</h2>
+        <h2 className="font-display text-sm font-semibold text-[var(--text-primary)]">Execution history</h2>
         {job.executions.length === 0 ? (
           <div className="mt-2 rounded-xl border border-dashed border-[var(--border-subtle)] p-6 text-center text-sm text-[var(--text-secondary)]">
             No attempts yet - this job hasn't been claimed.
@@ -109,7 +115,7 @@ export function JobDetailPage() {
                   <div className="mt-2 text-xs text-status-dead-letter">{execution.errorMessage}</div>
                 )}
                 {execution.logs && execution.logs.length > 0 && (
-                  <div className="mt-3 rounded-md bg-[var(--surface)] p-2 font-mono text-xs text-[var(--text-secondary)]">
+                  <div className="mt-3 rounded-lg bg-[var(--surface-sunken)] p-2.5 font-mono text-xs text-[var(--text-secondary)]">
                     {execution.logs.map((log) => (
                       <div key={log.id}>
                         <span className="text-[var(--text-secondary)]/70">

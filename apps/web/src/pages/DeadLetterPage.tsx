@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { useDeadLetterEntries, useRetryDeadLetterEntry } from "../hooks/useDeadLetter";
 import { useToast } from "../contexts/ToastContext";
 import { ApiRequestError } from "../lib/api";
+import { PageHeader } from "../components/PageHeader";
+import { primaryButtonClassName, secondaryButtonClassName } from "../components/formStyles";
 
 export function DeadLetterPage() {
   const [page, setPage] = useState(1);
@@ -25,14 +27,14 @@ export function DeadLetterPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-[var(--text-primary)]">Dead Letter Queue</h1>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">
-        Jobs that exceeded their retry budget. Resubmitting resets them to a fresh queued state.
-      </p>
+      <PageHeader
+        title="Dead Letter Queue"
+        description="Jobs that exceeded their retry budget. Resubmitting resets them to a fresh queued state."
+      />
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
         <table className="w-full text-left text-sm">
-          <thead className="bg-[var(--surface-raised)] text-xs uppercase tracking-wide text-[var(--text-secondary)]">
+          <thead className="bg-[var(--surface-raised)] font-mono text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
             <tr>
               <th className="px-4 py-3 font-medium">Job type</th>
               <th className="px-4 py-3 font-medium">Reason</th>
@@ -64,24 +66,30 @@ export function DeadLetterPage() {
               </tr>
             )}
             {data?.data.map((entry) => (
-              <tr key={entry.id} className="border-t border-[var(--border-subtle)]">
+              <tr
+                key={entry.id}
+                className="border-t border-[var(--border-subtle)] transition-colors hover:bg-[var(--surface-raised)]/60"
+              >
                 <td className="px-4 py-3 font-medium text-[var(--text-primary)]">
-                  <Link to={`/jobs/${entry.jobId}`} className="hover:underline">
+                  <Link to={`/jobs/${entry.jobId}`} className="hover:text-[var(--brand)] hover:underline">
                     {entry.job?.jobType ?? entry.jobId}
                   </Link>
                 </td>
                 <td className="px-4 py-3 text-[var(--text-secondary)]">{entry.reason}</td>
-                <td className="max-w-xs truncate px-4 py-3 text-status-dead-letter" title={entry.finalError ?? ""}>
+                <td
+                  className="max-w-xs truncate px-4 py-3 font-mono text-xs text-status-dead-letter"
+                  title={entry.finalError ?? ""}
+                >
                   {entry.finalError ?? "-"}
                 </td>
-                <td className="px-4 py-3 text-[var(--text-secondary)]">
+                <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
                   {new Date(entry.movedAt).toLocaleString()}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleRetry(entry.id, entry.job?.jobType ?? "job")}
                     disabled={retryingId === entry.id}
-                    className="rounded-md bg-status-running px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    className={`${primaryButtonClassName} px-3 py-1.5 text-xs`}
                   >
                     {retryingId === entry.id ? "Retrying..." : "Retry"}
                   </button>
@@ -101,14 +109,14 @@ export function DeadLetterPage() {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="rounded-md border border-[var(--border-subtle)] px-3 py-1 disabled:opacity-40"
+              className={secondaryButtonClassName}
             >
               Previous
             </button>
             <button
               onClick={() => setPage((p) => Math.min(data.pagination.totalPages, p + 1))}
               disabled={page >= data.pagination.totalPages}
-              className="rounded-md border border-[var(--border-subtle)] px-3 py-1 disabled:opacity-40"
+              className={secondaryButtonClassName}
             >
               Next
             </button>

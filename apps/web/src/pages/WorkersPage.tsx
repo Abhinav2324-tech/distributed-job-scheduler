@@ -1,6 +1,7 @@
 import { clsx } from "clsx";
 import { useWorkers } from "../hooks/useWorkers";
 import { formatRelativeTime } from "../lib/formatRelativeTime";
+import { PageHeader } from "../components/PageHeader";
 
 const WORKER_STATUS_STYLES: Record<string, string> = {
   ALIVE: "bg-status-completed/10 text-status-completed border-status-completed/30",
@@ -28,14 +29,11 @@ export function WorkersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-semibold text-[var(--text-primary)]">Workers</h1>
-      <p className="mt-1 text-sm text-[var(--text-secondary)]">
-        Live worker fleet status, refreshed every few seconds.
-      </p>
+      <PageHeader title="Workers" description="Live worker fleet status, refreshed every few seconds." />
 
       <div className="mt-6 overflow-x-auto rounded-xl border border-[var(--border-subtle)]">
         <table className="w-full text-left text-sm">
-          <thead className="bg-[var(--surface-raised)] text-xs uppercase tracking-wide text-[var(--text-secondary)]">
+          <thead className="bg-[var(--surface-raised)] font-mono text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
             <tr>
               <th className="px-4 py-3 font-medium">Host</th>
               <th className="px-4 py-3 font-medium">Status</th>
@@ -68,15 +66,18 @@ export function WorkersPage() {
               </tr>
             )}
             {data?.data.map((worker) => (
-              <tr key={worker.id} className="border-t border-[var(--border-subtle)] align-top">
+              <tr
+                key={worker.id}
+                className="border-t border-[var(--border-subtle)] align-top transition-colors hover:bg-[var(--surface-raised)]/60"
+              >
                 <td className="px-4 py-3">
                   <div className="font-medium text-[var(--text-primary)]">{worker.hostname}</div>
-                  <div className="text-xs text-[var(--text-secondary)]">pid {worker.pid}</div>
+                  <div className="font-mono text-xs text-[var(--text-secondary)]">pid {worker.pid}</div>
                 </td>
                 <td className="px-4 py-3">
                   <WorkerStatusBadge status={worker.status} />
                 </td>
-                <td className="px-4 py-3 tabular-nums text-[var(--text-secondary)]">
+                <td className="px-4 py-3 font-mono tabular-nums text-[var(--text-secondary)]">
                   {worker.currentJobCount} / {worker.concurrency}
                 </td>
                 <td className="px-4 py-3">
@@ -95,7 +96,7 @@ export function WorkersPage() {
                 <td className="px-4 py-3 text-[var(--text-secondary)]">
                   {formatRelativeTime(worker.lastHeartbeatAt)}
                 </td>
-                <td className="px-4 py-3 text-[var(--text-secondary)]">
+                <td className="px-4 py-3 font-mono text-xs text-[var(--text-secondary)]">
                   {new Date(worker.startedAt).toLocaleString()}
                 </td>
               </tr>

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
-import { inputClassName, labelClassName } from "./formStyles";
+import { inputClassName, labelClassName, primaryButtonClassName } from "./formStyles";
 import { useProjects } from "../hooks/useProjects";
 import { useRetryPolicies } from "../hooks/useRetryPolicies";
 import { useCreateQueue, useUpdateQueue } from "../hooks/useQueues";
@@ -59,7 +59,7 @@ export function QueueFormModal({ queue, onClose }: QueueFormModalProps) {
     <Modal title={isEdit ? `Edit ${queue.name}` : "Create queue"} onClose={onClose}>
       <form onSubmit={handleSubmit}>
         {error && (
-          <div className="mb-4 rounded-md border border-status-dead-letter/30 bg-status-dead-letter/10 px-3 py-2 text-sm text-status-dead-letter">
+          <div className="mb-4 rounded-lg border border-status-dead-letter/30 bg-status-dead-letter/10 px-3 py-2 text-sm text-status-dead-letter">
             {error}
           </div>
         )}
@@ -134,11 +134,7 @@ export function QueueFormModal({ queue, onClose }: QueueFormModalProps) {
           ))}
         </select>
 
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded-md bg-status-running px-3 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-        >
+        <button type="submit" disabled={isSubmitting} className={`${primaryButtonClassName} w-full`}>
           {isSubmitting ? "Saving..." : isEdit ? "Save changes" : "Create queue"}
         </button>
       </form>

@@ -9,3 +9,5 @@ coverage/
 packages/db/generated/
 apps/web/dist/
 .turbo/
+
+.vercel

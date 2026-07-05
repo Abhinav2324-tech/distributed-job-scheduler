@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/build
+**/.git
+**/*.log
+**/coverage
+apps/web/dist
+packages/db/generated
+.env
+.env.local

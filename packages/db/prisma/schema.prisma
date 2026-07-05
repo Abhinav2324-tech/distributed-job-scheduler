@@ -1,0 +1,370 @@
+// ============================================================================
+// SCHEMA DESIGN NOTES
+// ----------------------------------------------------------------------------
+// Normalization:
+//   - Tenancy chain Organization -> Project -> Queue -> Job is fully
+//     normalized (3NF); no repeated group columns.
+//   - RetryPolicy is extracted so multiple Queues/ScheduledJobs can share a
+//     policy, BUT Job snapshots (maxRetries, backoffStrategy, baseDelay,
+//     maxDelay) at creation time. This is a deliberate denormalization:
+//     if an operator edits a queue's retry policy, in-flight jobs must keep
+//     executing under the contract they were created with, not silently
+//     change behavior mid-flight. Correctness > strict normalization here.
+//   - Worker.queueNames is a string[] rather than a join table. Queue
+//     assignment is worker-side operational config (which topics this
+//     process polls), not a referential fact that needs FK integrity - a
+//     worker can be configured for a queue name before that queue exists.
+//   - DeadLetterEntry stores only the terminal-failure annotation (reason,
+//     timestamps), not a duplicate copy of job data. Jobs is the single
+//     source of truth; DLQ is a thin marker + query convenience.
+//
+// Indexing:
+//   - Job(queueId, status, runAt): supports the atomic claim query
+//     (WHERE queue_id = ? AND status IN (...) AND run_at <= now()).
+//     A partial index (WHERE status IN ('QUEUED','SCHEDULED')) would be
+//     more selective in production; Prisma's schema DSL doesn't support
+//     partial indexes, so that refinement is added as a hand-written SQL
+//     migration, not expressed here.
+//   - Job(nextRetryAt) / Job(runAt): support the retry-sweeper and
+//     delayed-job-promotion background loops.
+//   - ScheduledJob(isActive, nextRunAt): supports the cron-tick sweep.
+//   - Worker(status, lastHeartbeatAt) and WorkerHeartbeat(workerId,
+//     heartbeatAt): support dead-worker detection.
+//
+// Cascade rules:
+//   - Org -> User/Project: Cascade (org deletion is a full teardown).
+//   - Project -> Queue: Cascade at the DB level, but the API NEVER issues a
+//     hard delete for "delete project" - it sets archivedAt and cascades
+//     that archive flag to child queues in application code. The Cascade
+//     FK exists for the rare genuine admin purge of an empty project.
+//   - Queue -> Job: RESTRICT. This is the real safety net: a queue with
+//     any job history cannot be hard-deleted even if something tries to
+//     cascade from Project down. Queues are archived, never dropped.
+//   - Job -> JobExecution -> JobLog: Cascade (no independent meaning
+//     without the parent job/execution).
+//   - Worker -> Job.claimedBy / JobExecution.worker: SetNull (purging a
+//     worker record must not delete job history, only its claim pointer).
+//   - ScheduledJob -> Job: SetNull (deleting a cron definition keeps the
+//     jobs it already spawned).
+//   - RetryPolicy -> Queue/ScheduledJob: SetNull (falls back to system
+//     defaults if the shared policy is removed).
+//
+// Deliberately out of scope (see design-decisions.md): multi-org membership
+// per user, refresh-token rotation, a separate Batches aggregate table,
+// per-job priority override.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users    User[]
+  projects Project[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  orgId        String   @map("org_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  role         UserRole @default(MEMBER)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@map("users")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  orgId       String    @map("org_id")
+  name        String
+  slug        String
+  description String?
+  archivedAt  DateTime? @map("archived_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  organization  Organization  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  queues        Queue[]
+  retryPolicies RetryPolicy[]
+
+  @@unique([orgId, slug])
+  @@index([orgId])
+  @@map("projects")
+}
+
+// ---------------------------------------------------------------------------
+// Retry policy (reusable, but snapshotted onto Job at creation - see notes)
+// ---------------------------------------------------------------------------
+
+enum BackoffStrategy {
+  FIXED
+  LINEAR
+  EXPONENTIAL
+}
+
+model RetryPolicy {
+  id               String          @id @default(uuid())
+  projectId        String          @map("project_id")
+  name             String
+  maxRetries       Int             @default(3) @map("max_retries")
+  backoffStrategy  BackoffStrategy @default(EXPONENTIAL) @map("backoff_strategy")
+  baseDelaySeconds Int             @default(30) @map("base_delay_seconds")
+  maxDelaySeconds  Int             @default(3600) @map("max_delay_seconds")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  queues        Queue[]
+  scheduledJobs ScheduledJob[]
+
+  @@unique([projectId, name])
+  @@map("retry_policies")
+}
+
+// ---------------------------------------------------------------------------
+// Queues
+// ---------------------------------------------------------------------------
+
+model Queue {
+  id             String    @id @default(uuid())
+  projectId      String    @map("project_id")
+  name           String
+  priority       Int       @default(0)
+  maxConcurrency Int       @default(5) @map("max_concurrency")
+  isPaused       Boolean   @default(false) @map("is_paused")
+  archivedAt     DateTime? @map("archived_at")
+  retryPolicyId  String?   @map("retry_policy_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  retryPolicy   RetryPolicy?   @relation(fields: [retryPolicyId], references: [id], onDelete: SetNull)
+  jobs          Job[]
+  scheduledJobs ScheduledJob[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("queues")
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled (cron) job definitions
+// ---------------------------------------------------------------------------
+
+model ScheduledJob {
+  id              String    @id @default(uuid())
+  queueId         String    @map("queue_id")
+  name            String
+  cronExpression  String    @map("cron_expression")
+  jobType         String    @map("job_type")
+  payloadTemplate Json      @map("payload_template")
+  isActive        Boolean   @default(true) @map("is_active")
+  retryPolicyId   String?   @map("retry_policy_id")
+  nextRunAt       DateTime  @map("next_run_at")
+  lastRunAt       DateTime? @map("last_run_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  queue       Queue        @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  retryPolicy RetryPolicy? @relation(fields: [retryPolicyId], references: [id], onDelete: SetNull)
+  jobs        Job[]
+
+  @@index([isActive, nextRunAt])
+  @@map("scheduled_jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Jobs (core table)
+// ---------------------------------------------------------------------------
+
+enum JobStatus {
+  QUEUED
+  SCHEDULED
+  CLAIMED
+  RUNNING
+  COMPLETED
+  FAILED
+  DEAD_LETTER
+}
+
+model Job {
+  id                String  @id @default(uuid())
+  queueId           String  @map("queue_id")
+  scheduledJobId    String? @map("scheduled_job_id")
+  claimedByWorkerId String? @map("claimed_by_worker_id")
+  batchId           String? @map("batch_id")
+  idempotencyKey    String? @map("idempotency_key")
+
+  jobType String @map("job_type")
+  payload Json
+
+  status JobStatus @default(QUEUED)
+  runAt  DateTime? @map("run_at")
+
+  // Retry contract - snapshotted from RetryPolicy at creation time.
+  retryCount       Int             @default(0) @map("retry_count")
+  maxRetries       Int             @map("max_retries")
+  backoffStrategy  BackoffStrategy @map("backoff_strategy")
+  baseDelaySeconds Int             @map("base_delay_seconds")
+  maxDelaySeconds  Int             @map("max_delay_seconds")
+  nextRetryAt      DateTime?       @map("next_retry_at")
+
+  claimedAt   DateTime? @map("claimed_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  failedAt    DateTime? @map("failed_at")
+  lastError   String?   @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  queue           Queue            @relation(fields: [queueId], references: [id], onDelete: Restrict)
+  scheduledJob    ScheduledJob?    @relation(fields: [scheduledJobId], references: [id], onDelete: SetNull)
+  claimedBy       Worker?          @relation(fields: [claimedByWorkerId], references: [id], onDelete: SetNull)
+  executions      JobExecution[]
+  deadLetterEntry DeadLetterEntry?
+
+  @@unique([queueId, idempotencyKey])
+  @@index([queueId, status, runAt])
+  @@index([nextRetryAt])
+  @@index([runAt])
+  @@index([batchId])
+  @@map("jobs")
+}
+
+// ---------------------------------------------------------------------------
+// Execution history (one row per attempt)
+// ---------------------------------------------------------------------------
+
+enum ExecutionStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model JobExecution {
+  id            String          @id @default(uuid())
+  jobId         String          @map("job_id")
+  attemptNumber Int             @map("attempt_number")
+  workerId      String?         @map("worker_id")
+  status        ExecutionStatus
+  startedAt     DateTime        @default(now()) @map("started_at")
+  finishedAt    DateTime?       @map("finished_at")
+  durationMs    Int?            @map("duration_ms")
+  errorMessage  String?         @map("error_message")
+
+  job    Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker Worker?  @relation(fields: [workerId], references: [id], onDelete: SetNull)
+  logs   JobLog[]
+
+  @@unique([jobId, attemptNumber])
+  @@index([jobId])
+  @@index([workerId])
+  @@map("job_executions")
+}
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+model JobLog {
+  id             String   @id @default(uuid())
+  jobExecutionId String   @map("job_execution_id")
+  timestamp      DateTime @default(now())
+  level          LogLevel @default(INFO)
+  message        String
+
+  execution JobExecution @relation(fields: [jobExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([jobExecutionId, timestamp])
+  @@map("job_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Workers
+// ---------------------------------------------------------------------------
+
+enum WorkerStatus {
+  ALIVE
+  DRAINING
+  DEAD
+}
+
+model Worker {
+  id              String       @id @default(uuid())
+  hostname        String
+  pid             Int
+  queueNames      String[]     @map("queue_names")
+  concurrency     Int
+  currentJobCount Int          @default(0) @map("current_job_count")
+  status          WorkerStatus @default(ALIVE)
+  startedAt       DateTime     @default(now()) @map("started_at")
+  lastHeartbeatAt DateTime     @default(now()) @map("last_heartbeat_at")
+
+  heartbeats WorkerHeartbeat[]
+  jobs       Job[]
+  executions JobExecution[]
+
+  @@index([status, lastHeartbeatAt])
+  @@map("workers")
+}
+
+model WorkerHeartbeat {
+  id              String   @id @default(uuid())
+  workerId        String   @map("worker_id")
+  heartbeatAt     DateTime @default(now()) @map("heartbeat_at")
+  currentJobCount Int      @map("current_job_count")
+
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId, heartbeatAt])
+  @@map("worker_heartbeats")
+}
+
+// ---------------------------------------------------------------------------
+// Dead letter queue (thin marker, not a data duplicate - see notes)
+// ---------------------------------------------------------------------------
+
+model DeadLetterEntry {
+  id         String    @id @default(uuid())
+  jobId      String    @unique @map("job_id")
+  reason     String
+  finalError String?   @map("final_error")
+  movedAt    DateTime  @default(now()) @map("moved_at")
+  resolvedAt DateTime? @map("resolved_at")
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@map("dead_letter_entries")
+}

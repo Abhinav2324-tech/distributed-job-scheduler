@@ -3,6 +3,7 @@ import { useQueues, useSetQueuePaused } from "../hooks/useQueues";
 import { useProjects } from "../hooks/useProjects";
 import { QueueFormModal } from "../components/QueueFormModal";
 import { ProjectFormModal } from "../components/ProjectFormModal";
+import { JobFormModal } from "../components/JobFormModal";
 import { PageHeader } from "../components/PageHeader";
 import { primaryButtonClassName, secondaryButtonClassName } from "../components/formStyles";
 import { useToast } from "../contexts/ToastContext";
@@ -16,6 +17,7 @@ export function QueuesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [editingQueue, setEditingQueue] = useState<Queue | null>(null);
+  const [submitJobQueueId, setSubmitJobQueueId] = useState<string | null>(null);
   const hasProjects = (projectsResult?.data.length ?? 0) > 0;
 
   async function togglePause(queue: Queue) {
@@ -117,12 +119,20 @@ export function QueuesPage() {
                   </button>
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => setEditingQueue(queue)}
-                    className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                  >
-                    Edit
-                  </button>
+                  <div className="flex justify-end gap-3">
+                    <button
+                      onClick={() => setSubmitJobQueueId(queue.id)}
+                      className="text-xs font-medium text-[var(--brand)] hover:underline"
+                    >
+                      Submit job
+                    </button>
+                    <button
+                      onClick={() => setEditingQueue(queue)}
+                      className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -133,6 +143,9 @@ export function QueuesPage() {
       {showCreate && <QueueFormModal onClose={() => setShowCreate(false)} />}
       {editingQueue && <QueueFormModal queue={editingQueue} onClose={() => setEditingQueue(null)} />}
       {showCreateProject && <ProjectFormModal onClose={() => setShowCreateProject(false)} />}
+      {submitJobQueueId && (
+        <JobFormModal queueId={submitJobQueueId} onClose={() => setSubmitJobQueueId(null)} />
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { clsx } from "clsx";
 import { applyTheme, getStoredTheme, type Theme } from "../lib/theme";
@@ -14,12 +14,18 @@ import {
   WorkersIcon,
 } from "./icons";
 
-const NAV_ITEMS: Array<{ to: string; label: string; end?: boolean; icon: (p: { className?: string }) => ReactNode }> = [
-  { to: "/", label: "Overview", end: true, icon: (p) => <OverviewIcon {...p} /> },
-  { to: "/queues", label: "Queues", icon: (p) => <QueuesIcon {...p} /> },
-  { to: "/jobs", label: "Jobs", icon: (p) => <JobsIcon {...p} /> },
-  { to: "/workers", label: "Workers", icon: (p) => <WorkersIcon {...p} /> },
-  { to: "/dead-letter", label: "Dead Letter Queue", icon: (p) => <DeadLetterIcon {...p} /> },
+const NAV_ITEMS: Array<{
+  to: string;
+  label: string;
+  end?: boolean;
+  tint: string;
+  icon: (p: { className?: string; style?: CSSProperties }) => ReactNode;
+}> = [
+  { to: "/", label: "Overview", end: true, tint: "var(--color-status-completed)", icon: (p) => <OverviewIcon {...p} /> },
+  { to: "/queues", label: "Queues", tint: "var(--color-status-scheduled)", icon: (p) => <QueuesIcon {...p} /> },
+  { to: "/jobs", label: "Jobs", tint: "var(--color-status-running)", icon: (p) => <JobsIcon {...p} /> },
+  { to: "/workers", label: "Workers", tint: "var(--brand)", icon: (p) => <WorkersIcon {...p} /> },
+  { to: "/dead-letter", label: "Dead Letter Queue", tint: "var(--color-status-dead-letter)", icon: (p) => <DeadLetterIcon {...p} /> },
 ];
 
 function initials(name: string): string {
@@ -71,17 +77,21 @@ export function Layout() {
                 <>
                   <span
                     className={clsx(
-                      "absolute left-0 top-1/2 h-4 w-[2.5px] -translate-y-1/2 rounded-full bg-[var(--brand)] transition-opacity",
+                      "absolute left-0 top-1/2 h-4 w-[2.5px] -translate-y-1/2 rounded-full transition-opacity",
                       isActive ? "opacity-100" : "opacity-0",
                     )}
+                    style={{ background: item.tint }}
                   />
                   {item.icon({
                     className: clsx(
-                      "h-4 w-4 shrink-0 transition-colors",
-                      isActive ? "text-[var(--brand)]" : "text-[var(--text-secondary)] group-hover:text-[var(--text-primary)]",
+                      "h-4 w-4 shrink-0 transition-opacity",
+                      isActive ? "opacity-100" : "opacity-60 group-hover:opacity-90",
                     ),
+                    style: { color: item.tint },
                   })}
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate" style={{ color: isActive ? item.tint : undefined }}>
+                    {item.label}
+                  </span>
                 </>
               )}
             </NavLink>

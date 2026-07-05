@@ -5,12 +5,28 @@ interface StatCardProps {
   value: ReactNode;
   sublabel?: string;
   accentClassName?: string;
+  icon?: ReactNode;
+  /** CSS color (usually a --color-status-* var) used for the icon chip and top rule. */
+  tint?: string;
 }
 
-export function StatCard({ label, value, sublabel, accentClassName }: StatCardProps) {
+export function StatCard({ label, value, sublabel, accentClassName, icon, tint }: StatCardProps) {
   return (
-    <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 transition-colors hover:border-[var(--text-secondary)]/30">
-      <div className="text-xs font-medium tracking-wide text-[var(--text-secondary)]">{label}</div>
+    <div className="relative overflow-hidden rounded-xl border border-[var(--border-subtle)] bg-[var(--surface-raised)] p-4 transition-colors hover:border-[var(--text-secondary)]/30">
+      {tint && (
+        <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: tint }} aria-hidden="true" />
+      )}
+      <div className="flex items-start justify-between">
+        <div className="text-xs font-medium tracking-wide text-[var(--text-secondary)]">{label}</div>
+        {icon && (
+          <div
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
+            style={{ background: tint ? `color-mix(in srgb, ${tint} 16%, transparent)` : undefined, color: tint }}
+          >
+            {icon}
+          </div>
+        )}
+      </div>
       <div
         className={`mt-2 font-display text-[28px] font-semibold leading-none tabular-nums text-[var(--text-primary)] ${accentClassName ?? ""}`}
       >

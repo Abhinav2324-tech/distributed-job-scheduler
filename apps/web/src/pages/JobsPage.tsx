@@ -4,7 +4,8 @@ import { useJobs } from "../hooks/useJobs";
 import { useQueues } from "../hooks/useQueues";
 import { StatusBadge, type JobStatusLike } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
-import { ghostButtonClassName, inputClassName, secondaryButtonClassName } from "../components/formStyles";
+import { JobFormModal } from "../components/JobFormModal";
+import { ghostButtonClassName, inputClassName, primaryButtonClassName, secondaryButtonClassName } from "../components/formStyles";
 
 const STATUS_OPTIONS: JobStatusLike[] = [
   "QUEUED",
@@ -24,6 +25,7 @@ export function JobsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
+  const [showSubmit, setShowSubmit] = useState(false);
 
   const { data, isLoading, isError } = useJobs({
     status: status || undefined,
@@ -56,6 +58,11 @@ export function JobsPage() {
       <PageHeader
         title="Job Explorer"
         description="Search and filter every job across your organization's queues."
+        actions={
+          <button onClick={() => setShowSubmit(true)} className={primaryButtonClassName}>
+            Submit job
+          </button>
+        }
       />
 
       <div className="mt-5 flex flex-wrap items-end gap-3">
@@ -175,6 +182,8 @@ export function JobsPage() {
           </div>
         </div>
       )}
+
+      {showSubmit && <JobFormModal onClose={() => setShowSubmit(false)} />}
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -30,10 +31,16 @@ function CustomTooltip({
   label?: string;
 }) {
   if (!active || !payload || payload.length === 0) return null;
+  // The gradient fill under each line is a second series sharing the same
+  // dataKey/name (for the area-under-curve effect), so de-dupe by name here
+  // rather than showing "Completed" and "Failed" twice.
+  const uniquePayload = payload.filter(
+    (entry, index) => payload.findIndex((other) => other.name === entry.name) === index,
+  );
   return (
     <div className="rounded-lg border border-[var(--border-subtle)] bg-[var(--surface)] px-3 py-2 text-xs shadow-lg">
       <div className="mb-1 font-medium text-[var(--text-primary)]">{label ? formatHour(label) : ""}</div>
-      {payload.map((entry) => (
+      {uniquePayload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-1.5 text-[var(--text-secondary)]">
           <span className="h-2 w-2 rounded-full" style={{ background: entry.color }} />
           {entry.name}: <span className="font-medium text-[var(--text-primary)]">{entry.value}</span>
@@ -54,7 +61,17 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
 
   return (
     <ResponsiveContainer width="100%" height={224}>
-      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+      <ComposedChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+        <defs>
+          <linearGradient id="throughput-completed-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-status-completed)" stopOpacity={0.32} />
+            <stop offset="100%" stopColor="var(--color-status-completed)" stopOpacity={0} />
+          </linearGradient>
+          <linearGradient id="throughput-failed-fill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--color-status-dead-letter)" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="var(--color-status-dead-letter)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
         <CartesianGrid vertical={false} stroke="var(--border-subtle)" strokeDasharray="0" />
         <XAxis
           dataKey="bucket"
@@ -78,6 +95,22 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
           iconSize={8}
           wrapperStyle={{ fontSize: 12, color: "var(--text-secondary)" }}
         />
+        <Area
+          type="monotone"
+          dataKey="completed"
+          name="Completed"
+          stroke="none"
+          fill="url(#throughput-completed-fill)"
+          legendType="none"
+        />
+        <Area
+          type="monotone"
+          dataKey="failed"
+          name="Failed"
+          stroke="none"
+          fill="url(#throughput-failed-fill)"
+          legendType="none"
+        />
         <Line
           type="monotone"
           dataKey="completed"
@@ -96,7 +129,7 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
           dot={{ r: 3, strokeWidth: 2, stroke: "var(--surface)", fill: "var(--color-status-dead-letter)" }}
           activeDot={{ r: 4, strokeWidth: 2, stroke: "var(--surface)" }}
         />
-      </LineChart>
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

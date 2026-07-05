@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WS_EVENTS } from "@jobscheduler/shared";
 import { apiFetch } from "../lib/api";
 import { useSocketEvent } from "./useSocketEvent";
@@ -56,4 +56,26 @@ export function useJob(id: string | undefined) {
   });
 
   return query;
+}
+
+export interface CreateJobInput {
+  jobType: string;
+  payload?: unknown;
+  runAt?: string;
+  idempotencyKey?: string;
+}
+
+export function useCreateJob(queueId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateJobInput) =>
+      apiFetch<{ job: Job; deduped: boolean }>(`/api/queues/${queueId}/jobs`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["queues"] });
+    },
+  });
 }

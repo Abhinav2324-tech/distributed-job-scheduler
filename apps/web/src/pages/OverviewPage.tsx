@@ -3,6 +3,7 @@ import { StatCard } from "../components/StatCard";
 import { ThroughputChart } from "../components/ThroughputChart";
 import { StatusBreakdown } from "../components/StatusBreakdown";
 import { PageHeader } from "../components/PageHeader";
+import { DeadLetterIcon, OverviewIcon, QueuesIcon, WorkersIcon } from "../components/icons";
 
 export function OverviewPage() {
   const { data, isLoading, isError } = useOverview();
@@ -23,18 +24,30 @@ export function OverviewPage() {
           label="Active workers"
           value={data.activeWorkers}
           sublabel={data.deadWorkers > 0 ? `${data.deadWorkers} dead` : "All healthy"}
+          icon={<WorkersIcon className="h-4 w-4" />}
+          tint="var(--color-status-running)"
         />
-        <StatCard label="Queue backlog" value={data.queueBacklog} sublabel="Queued + scheduled" />
+        <StatCard
+          label="Queue backlog"
+          value={data.queueBacklog}
+          sublabel="Queued + scheduled"
+          icon={<QueuesIcon className="h-4 w-4" />}
+          tint="var(--color-status-scheduled)"
+        />
         <StatCard
           label="Failed job rate"
           value={`${data.failureRatePercent}%`}
           sublabel="Last hour"
           accentClassName={data.failureRatePercent > 20 ? "text-status-dead-letter" : undefined}
+          icon={<DeadLetterIcon className="h-4 w-4" />}
+          tint={data.failureRatePercent > 20 ? "var(--color-status-dead-letter)" : "var(--color-status-failed)"}
         />
         <StatCard
           label="Throughput"
           value={data.completedLastHour}
           sublabel={`${data.failedLastHour} failed, last hour`}
+          icon={<OverviewIcon className="h-4 w-4" />}
+          tint="var(--color-status-completed)"
         />
       </div>
 

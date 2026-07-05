@@ -6,10 +6,10 @@
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 28 28" fill="none" className={className} aria-hidden="true">
-      <rect width="28" height="28" rx="7" fill="var(--brand)" />
-      <rect x="6" y="8" width="16" height="2.6" rx="1.3" fill="var(--brand-contrast)" />
-      <rect x="6" y="12.7" width="11" height="2.6" rx="1.3" fill="var(--brand-contrast)" opacity="0.75" />
-      <rect x="6" y="17.4" width="6" height="2.6" rx="1.3" fill="var(--brand-contrast)" opacity="0.5" />
+      <rect width="28" height="28" rx="7" fill="var(--surface-sunken)" />
+      <rect x="6" y="8" width="16" height="2.6" rx="1.3" fill="var(--brand)" />
+      <rect x="6" y="12.7" width="11" height="2.6" rx="1.3" fill="var(--color-status-scheduled)" />
+      <rect x="6" y="17.4" width="6" height="2.6" rx="1.3" fill="var(--color-status-failed)" />
     </svg>
   );
 }

@@ -1,0 +1,1048 @@
+openapi: 3.0.3
+info:
+  title: Distributed Job Scheduler API
+  version: "1.0.0"
+  description: |
+    REST API for a distributed job scheduling platform: organizations, projects,
+    queues, retry policies, jobs (immediate/delayed/scheduled/batch), scheduled
+    (cron) job definitions, a dead letter queue, and worker fleet visibility.
+
+    Every resource is scoped to the caller's organization (derived from the JWT),
+    with one exception: `GET /api/workers`, since a worker fleet is shared
+    operational infrastructure rather than tenant data — see design-decisions.md.
+
+    Real-time updates (job status changes, queue stats) are pushed over
+    Socket.IO, authenticated with the same JWT at the handshake, scoped to an
+    `org:{orgId}` room. That channel isn't representable in OpenAPI and isn't
+    documented further here.
+servers:
+  - url: http://localhost:4000
+    description: Local (docker-compose / dev)
+  - url: https://job-scheduler-api-4sax.onrender.com
+    description: Deployed (Render)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Projects
+  - name: Queues
+  - name: Retry Policies
+  - name: Jobs
+  - name: Scheduled Jobs
+  - name: Dead Letter Queue
+  - name: Workers
+  - name: Overview
+  - name: Health
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Liveness/readiness check
+      security: []
+      responses:
+        "200":
+          description: API and database are reachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  db: { type: string, example: connected }
+                  timestamp: { type: string, format: date-time }
+        "503":
+          description: API is up but the database is unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: degraded }
+                  db: { type: string, example: unreachable }
+                  timestamp: { type: string, format: date-time }
+
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new organization and its first (admin) user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orgName, name, email, password]
+              properties:
+                orgName: { type: string, minLength: 2, maxLength: 100 }
+                name: { type: string, minLength: 1, maxLength: 100 }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8, maxLength: 200 }
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get the currently authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/projects:
+    post:
+      tags: [Projects]
+      summary: Create a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: string, maxLength: 1000 }
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    get:
+      tags: [Projects]
+      summary: List projects in the caller's organization
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - { $ref: "#/components/parameters/IncludeArchived" }
+      responses:
+        "200":
+          description: Paginated list of projects
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedResult"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Project" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/projects/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    get:
+      tags: [Projects]
+      summary: Get a project by ID
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Projects]
+      summary: Update a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: string, maxLength: 1000 }
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Projects]
+      summary: Archive a project (admin only)
+      description: Soft-delete — sets `archivedAt` and cascades the archive flag to child queues. Requires the ADMIN role.
+      responses:
+        "204": { description: Archived }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/projects/{projectId}/queues:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Queues]
+      summary: Create a queue within a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                priority: { type: integer, minimum: 0, maximum: 1000, default: 0 }
+                maxConcurrency: { type: integer, minimum: 1, maximum: 1000, default: 5 }
+                retryPolicyId: { type: string, format: uuid, nullable: true }
+      responses:
+        "201":
+          description: Queue created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    get:
+      tags: [Queues]
+      summary: List queues within a project (unpaginated array)
+      parameters:
+        - { $ref: "#/components/parameters/IncludeArchived" }
+      responses:
+        "200":
+          description: Queues in the project
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Queue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/projects/{projectId}/retry-policies:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Retry Policies]
+      summary: Create a reusable retry policy for a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                maxRetries: { type: integer, minimum: 0, maximum: 50, default: 3 }
+                backoffStrategy:
+                  type: string
+                  enum: [FIXED, LINEAR, EXPONENTIAL]
+                  default: EXPONENTIAL
+                baseDelaySeconds: { type: integer, minimum: 1, maximum: 86400, default: 30 }
+                maxDelaySeconds: { type: integer, minimum: 1, maximum: 86400, default: 3600 }
+      responses:
+        "201":
+          description: Retry policy created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetryPolicy" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    get:
+      tags: [Retry Policies]
+      summary: List retry policies for a project (unpaginated array)
+      responses:
+        "200":
+          description: Retry policies
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RetryPolicy" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/retry-policies/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    patch:
+      tags: [Retry Policies]
+      summary: Update a retry policy
+      description: Only affects jobs created *after* the update — in-flight jobs keep the retry contract they were created with (see design-decisions.md).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                maxRetries: { type: integer, minimum: 0, maximum: 50 }
+                backoffStrategy: { type: string, enum: [FIXED, LINEAR, EXPONENTIAL] }
+                baseDelaySeconds: { type: integer, minimum: 1, maximum: 86400 }
+                maxDelaySeconds: { type: integer, minimum: 1, maximum: 86400 }
+      responses:
+        "200":
+          description: Updated retry policy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RetryPolicy" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues:
+    get:
+      tags: [Queues]
+      summary: List all queues across the organization (flat, unpaginated)
+      parameters:
+        - name: projectId
+          in: query
+          schema: { type: string, format: uuid }
+          description: Optionally scope to one project
+        - { $ref: "#/components/parameters/IncludeArchived" }
+      responses:
+        "200":
+          description: Queues, each including its parent project and live stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Queue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/queues/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    get:
+      tags: [Queues]
+      summary: Get a queue by ID
+      responses:
+        "200":
+          description: Queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Queues]
+      summary: Update a queue's priority, concurrency, or retry policy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                priority: { type: integer, minimum: 0, maximum: 1000 }
+                maxConcurrency: { type: integer, minimum: 1, maximum: 1000 }
+                retryPolicyId: { type: string, format: uuid, nullable: true }
+      responses:
+        "200":
+          description: Updated queue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Queues]
+      summary: Archive a queue
+      description: Soft-delete only — queues with job history are never hard-deleted (Queue→Job is a RESTRICT foreign key; see design-decisions.md).
+      responses:
+        "204": { description: Archived }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues/{id}/pause:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    post:
+      tags: [Queues]
+      summary: Pause a queue (stops new claims; in-flight jobs finish normally)
+      responses:
+        "200":
+          description: Queue paused
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues/{id}/resume:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    post:
+      tags: [Queues]
+      summary: Resume a paused queue
+      responses:
+        "200":
+          description: Queue resumed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Queue" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues/{id}/stats:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    get:
+      tags: [Queues]
+      summary: Get live per-status job counts for a queue
+      responses:
+        "200":
+          description: Status counts
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+                example: { QUEUED: 4, RUNNING: 2, COMPLETED: 120, DEAD_LETTER: 1 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues/{queueId}/jobs:
+    parameters:
+      - name: queueId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Jobs]
+      summary: Submit a job to a queue
+      description: Omit `runAt` for immediate execution, or set it in the future for a delayed job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateJobInput" }
+      responses:
+        "201":
+          description: Job created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job: { $ref: "#/components/schemas/Job" }
+                  deduped:
+                    type: boolean
+                    description: true if an existing job with the same idempotencyKey was returned instead of creating a new one
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues/{queueId}/jobs/batch:
+    parameters:
+      - name: queueId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Jobs]
+      summary: Submit up to 500 jobs to a queue in one call
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jobs]
+              properties:
+                jobs:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: { $ref: "#/components/schemas/CreateJobInput" }
+      responses:
+        "201":
+          description: Jobs created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items: { $ref: "#/components/schemas/Job" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/jobs:
+    get:
+      tags: [Jobs]
+      summary: List jobs across the organization, with filters
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/JobStatus" }
+        - name: queueId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: projectId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: from
+          in: query
+          schema: { type: string, format: date-time }
+        - name: to
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Paginated jobs
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedResult"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/jobs/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    get:
+      tags: [Jobs]
+      summary: Get a job, including its execution attempts and logs
+      responses:
+        "200":
+          description: Job detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/queues/{queueId}/scheduled-jobs:
+    parameters:
+      - name: queueId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Scheduled Jobs]
+      summary: Create a cron-scheduled job definition on a queue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, cronExpression, jobType]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                cronExpression: { type: string, minLength: 1, maxLength: 100, example: "*/5 * * * *" }
+                jobType: { type: string, minLength: 1, maxLength: 100 }
+                payloadTemplate: { type: object, additionalProperties: true, default: {} }
+      responses:
+        "201":
+          description: Scheduled job created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledJob" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    get:
+      tags: [Scheduled Jobs]
+      summary: List scheduled job definitions for a queue (unpaginated array)
+      responses:
+        "200":
+          description: Scheduled jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ScheduledJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/scheduled-jobs/{id}:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    get:
+      tags: [Scheduled Jobs]
+      summary: Get a scheduled job definition
+      responses:
+        "200":
+          description: Scheduled job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Scheduled Jobs]
+      summary: Update a scheduled job definition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                cronExpression: { type: string, minLength: 1, maxLength: 100 }
+                jobType: { type: string, minLength: 1, maxLength: 100 }
+                payloadTemplate: { type: object, additionalProperties: true }
+                isActive: { type: boolean }
+      responses:
+        "200":
+          description: Updated scheduled job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledJob" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Scheduled Jobs]
+      summary: Delete a scheduled job definition
+      description: Jobs already spawned by this definition are kept (ScheduledJob→Job is SetNull on delete).
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/dlq:
+    get:
+      tags: [Dead Letter Queue]
+      summary: List dead-lettered jobs
+      parameters:
+        - { $ref: "#/components/parameters/Page" }
+        - { $ref: "#/components/parameters/PageSize" }
+        - name: queueId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: includeResolved
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        "200":
+          description: Paginated dead letter entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/PaginatedResult"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/DeadLetterEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/dlq/{id}/retry:
+    parameters:
+      - { $ref: "#/components/parameters/IdParam" }
+    post:
+      tags: [Dead Letter Queue]
+      summary: Requeue a dead-lettered job for another attempt
+      description: Resets the job back to QUEUED with retryCount reset, and marks the dead letter entry resolved.
+      responses:
+        "200":
+          description: Job requeued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/workers:
+    get:
+      tags: [Workers]
+      summary: List the worker fleet
+      description: Not organization-scoped — a worker fleet is shared operational infrastructure, not tenant data.
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [ALIVE, DRAINING, DEAD] }
+      responses:
+        "200":
+          description: Workers, each with its currently claimed jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: "#/components/schemas/Worker" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/overview:
+    get:
+      tags: [Overview]
+      summary: Dashboard summary — worker counts, backlog, throughput, failure rate
+      responses:
+        "200":
+          description: Overview metrics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Overview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: pageSize
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IncludeArchived:
+      name: includeArchived
+      in: query
+      schema: { type: boolean, default: false }
+
+  responses:
+    ValidationError:
+      description: Request failed schema validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { error: { code: VALIDATION_ERROR, message: "Invalid request body", details: {} } }
+    Unauthorized:
+      description: Missing, malformed, or expired bearer token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { error: { code: UNAUTHORIZED, message: "Missing bearer token" } }
+    Forbidden:
+      description: Authenticated, but lacks the required role
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { error: { code: FORBIDDEN, message: "Requires role ADMIN" } }
+    NotFound:
+      description: Resource does not exist (or belongs to another organization)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { error: { code: NOT_FOUND, message: "Not found" } }
+    Conflict:
+      description: Request conflicts with existing state (e.g. duplicate email)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { error: { code: CONFLICT, message: "Email already registered" } }
+
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details: {}
+      required: [error]
+
+    PaginatedResult:
+      type: object
+      properties:
+        pagination:
+          type: object
+          properties:
+            page: { type: integer }
+            pageSize: { type: integer }
+            totalItems: { type: integer }
+            totalPages: { type: integer }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orgId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { type: string, enum: [ADMIN, MEMBER] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        orgId: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string, nullable: true }
+        archivedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    RetryPolicy:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        maxRetries: { type: integer }
+        backoffStrategy: { type: string, enum: [FIXED, LINEAR, EXPONENTIAL] }
+        baseDelaySeconds: { type: integer }
+        maxDelaySeconds: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Queue:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        name: { type: string }
+        priority: { type: integer }
+        maxConcurrency: { type: integer }
+        isPaused: { type: boolean }
+        archivedAt: { type: string, format: date-time, nullable: true }
+        retryPolicyId: { type: string, format: uuid, nullable: true }
+        project:
+          type: object
+          nullable: true
+          description: Included on the org-wide GET /api/queues listing
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+        stats:
+          type: object
+          nullable: true
+          description: Included on the org-wide GET /api/queues listing
+          additionalProperties: { type: integer }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    JobStatus:
+      type: string
+      enum: [QUEUED, SCHEDULED, CLAIMED, RUNNING, COMPLETED, FAILED, DEAD_LETTER]
+
+    CreateJobInput:
+      type: object
+      required: [jobType]
+      properties:
+        jobType: { type: string, minLength: 1, maxLength: 100 }
+        payload: { type: object, additionalProperties: true, default: {} }
+        runAt:
+          type: string
+          format: date-time
+          description: Future timestamp for a delayed job; omit for immediate execution
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Unique per queue — a repeat submission with the same key returns the existing job instead of creating a duplicate
+
+    Job:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        queueId: { type: string, format: uuid }
+        scheduledJobId: { type: string, format: uuid, nullable: true }
+        claimedByWorkerId: { type: string, format: uuid, nullable: true }
+        batchId: { type: string, nullable: true }
+        idempotencyKey: { type: string, nullable: true }
+        jobType: { type: string }
+        payload: { type: object, additionalProperties: true }
+        status: { $ref: "#/components/schemas/JobStatus" }
+        runAt: { type: string, format: date-time, nullable: true }
+        retryCount: { type: integer }
+        maxRetries: { type: integer }
+        backoffStrategy: { type: string, enum: [FIXED, LINEAR, EXPONENTIAL] }
+        baseDelaySeconds: { type: integer }
+        maxDelaySeconds: { type: integer }
+        nextRetryAt: { type: string, format: date-time, nullable: true }
+        claimedAt: { type: string, format: date-time, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
+        failedAt: { type: string, format: date-time, nullable: true }
+        lastError: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    JobLog:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        jobExecutionId: { type: string, format: uuid }
+        timestamp: { type: string, format: date-time }
+        level: { type: string, enum: [DEBUG, INFO, WARN, ERROR] }
+        message: { type: string }
+
+    JobExecution:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        attemptNumber: { type: integer }
+        workerId: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [RUNNING, COMPLETED, FAILED] }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        durationMs: { type: integer, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        logs:
+          type: array
+          items: { $ref: "#/components/schemas/JobLog" }
+
+    JobDetail:
+      allOf:
+        - $ref: "#/components/schemas/Job"
+        - type: object
+          properties:
+            executions:
+              type: array
+              items: { $ref: "#/components/schemas/JobExecution" }
+            deadLetterEntry:
+              allOf:
+                - $ref: "#/components/schemas/DeadLetterEntry"
+              nullable: true
+
+    ScheduledJob:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        queueId: { type: string, format: uuid }
+        name: { type: string }
+        cronExpression: { type: string }
+        jobType: { type: string }
+        payloadTemplate: { type: object, additionalProperties: true }
+        isActive: { type: boolean }
+        retryPolicyId: { type: string, format: uuid, nullable: true }
+        nextRunAt: { type: string, format: date-time }
+        lastRunAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    DeadLetterEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        jobId: { type: string, format: uuid }
+        reason: { type: string }
+        finalError: { type: string, nullable: true }
+        movedAt: { type: string, format: date-time }
+        resolvedAt: { type: string, format: date-time, nullable: true }
+        job:
+          allOf:
+            - $ref: "#/components/schemas/Job"
+          nullable: true
+
+    Worker:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        hostname: { type: string }
+        pid: { type: integer }
+        queueNames:
+          type: array
+          items: { type: string }
+          description: Empty array means "polls all queues"
+        concurrency: { type: integer }
+        currentJobCount: { type: integer }
+        status: { type: string, enum: [ALIVE, DRAINING, DEAD] }
+        startedAt: { type: string, format: date-time }
+        lastHeartbeatAt: { type: string, format: date-time }
+        activeJobs:
+          type: array
+          description: Up to 10 jobs currently CLAIMED/RUNNING under this worker
+          items: { $ref: "#/components/schemas/Job" }
+
+    Overview:
+      type: object
+      properties:
+        activeWorkers: { type: integer }
+        deadWorkers: { type: integer }
+        queueBacklog: { type: integer, description: "QUEUED + SCHEDULED jobs across all queues" }
+        runningCount: { type: integer }
+        completedLastHour: { type: integer }
+        failedLastHour: { type: integer }
+        failureRatePercent: { type: number }
+        statusCounts:
+          type: object
+          additionalProperties: { type: integer }
+        throughputSeries:
+          type: array
+          description: Hourly buckets (UTC) for the last 12 hours
+          items:
+            type: object
+            properties:
+              hour: { type: string, format: date-time }
+              completed: { type: integer }
+              failed: { type: integer }

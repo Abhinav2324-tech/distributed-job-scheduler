@@ -4,6 +4,7 @@ import pinoHttp from "pino-http";
 import { logger } from "./lib/logger";
 import { env } from "./config/env";
 import { healthRouter } from "./routes/health";
+import { docsRouter } from "./routes/docs";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { authRouter } from "./modules/auth/auth.routes";
 import { projectsRouter } from "./modules/projects/projects.routes";
@@ -26,6 +27,7 @@ export function createApp() {
   app.use(pinoHttp({ logger }));
 
   app.use(healthRouter);
+  app.use(docsRouter);
 
   app.use("/api/auth", authRouter);
   app.use("/api/projects", projectsRouter);

@@ -12,4 +12,4 @@ RUN npm run build --workspace @jobscheduler/db \
 ENV NODE_ENV=production
 EXPOSE 4000
 
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["sh", "-c", "npm run migrate:deploy --workspace @jobscheduler/db && node apps/api/dist/index.js"]

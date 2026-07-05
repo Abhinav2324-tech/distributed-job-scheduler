@@ -15,4 +15,9 @@ const envSchema = z.object({
   REALTIME_BROADCAST_INTERVAL_MS: z.coerce.number().int().positive().default(2000),
 });
 
+// Render (and other PaaS) inject PORT rather than our own API_PORT name.
+if (!process.env.API_PORT && process.env.PORT) {
+  process.env.API_PORT = process.env.PORT;
+}
+
 export const env = envSchema.parse(process.env);

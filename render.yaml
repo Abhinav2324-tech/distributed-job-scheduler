@@ -36,7 +36,12 @@ services:
       - key: REALTIME_BROADCAST_INTERVAL_MS
         value: "2000"
 
-  - type: worker
+  # Render's free plan doesn't offer the "Background Worker" service type
+  # (paid plans only), so this deploys as a "web" service instead - the
+  # worker binds $PORT purely to satisfy that requirement (see
+  # apps/worker/src/index.ts) and otherwise runs its normal poll loop.
+  # On a paid plan, switch `type` to `worker` and drop the port binding.
+  - type: web
     name: job-scheduler-worker
     runtime: docker
     dockerfilePath: ./apps/worker/Dockerfile

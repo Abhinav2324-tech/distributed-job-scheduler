@@ -1,8 +1,24 @@
 import os from "os";
+import { createServer } from "http";
 import { prisma, WorkerStatus } from "@jobscheduler/db";
 import { env } from "./config/env";
 import { logger } from "./lib/logger";
 import { createPollLoop, type PollLoop } from "./loop";
+
+// Render's free tier only offers the "Web Service" type (background workers
+// require a paid plan), and web services must bind to $PORT. This listener
+// exists solely to satisfy that platform requirement - it plays no part in
+// job processing, which happens entirely through the poll loop below. It's a
+// no-op locally/in docker-compose, where PORT is never set.
+if (process.env.PORT) {
+  const port = Number(process.env.PORT);
+  createServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("worker running\n");
+  }).listen(port, () => {
+    logger.info({ port }, "Worker health listener bound (Render web-service requirement)");
+  });
+}
 
 let workerId: string;
 let heartbeatTimer: NodeJS.Timeout | undefined;

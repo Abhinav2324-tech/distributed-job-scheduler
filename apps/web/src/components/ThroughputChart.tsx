@@ -85,7 +85,7 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
           tick={{ fill: "var(--text-secondary)", fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          width={32}
+          width={40}
         />
         <Tooltip content={<CustomTooltip />} cursor={{ stroke: "var(--border-subtle)" }} />
         <Legend
@@ -94,6 +94,10 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
           iconType="circle"
           iconSize={8}
           wrapperStyle={{ fontSize: 12, color: "var(--text-secondary)" }}
+          payload={[
+            { value: "Completed", type: "circle", color: "var(--color-status-completed)" },
+            { value: "Failed", type: "circle", color: "var(--color-status-dead-letter)" },
+          ]}
         />
         <Area
           type="monotone"
@@ -101,7 +105,6 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
           name="Completed"
           stroke="none"
           fill="url(#throughput-completed-fill)"
-          legendType="none"
         />
         <Area
           type="monotone"
@@ -109,7 +112,6 @@ export function ThroughputChart({ data }: { data: ThroughputPoint[] }) {
           name="Failed"
           stroke="none"
           fill="url(#throughput-failed-fill)"
-          legendType="none"
         />
         <Line
           type="monotone"
